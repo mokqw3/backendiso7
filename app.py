@@ -6,23 +6,25 @@ from flask_sqlalchemy import SQLAlchemy
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 import pytz
-from dotenv import load_dotenv # Import the new library
+from dotenv import load_dotenv # Used for local development
 
-# Load environment variables from .env file
+# Load environment variables from .env file (for local testing)
+# On Render, the variables will be set in the dashboard
 load_dotenv()
 
 # --- Configuration ---
 # Get the database URL from the environment variable
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# ** FIX FOR LOCAL WINDOWS & OTHER SYSTEMS **
-# The 'postgresql://' scheme is not always recognized by SQLAlchemy on all systems.
-# This line replaces it with 'postgresql+psycopg2://' which is more explicit and robust.
+# ** THE FIX for Render and other systems **
+# This block checks if the URL starts with the standard 'postgresql://'
+# and replaces it with 'postgresql+psycopg2://' which SQLAlchemy prefers.
+# This solves the 'Could not parse SQLAlchemy URL' error.
 if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 if not DATABASE_URL:
-    raise ValueError("No DATABASE_URL set for the application. Make sure you have a .env file with the DATABASE_URL.")
+    raise ValueError("No DATABASE_URL set. Please set it in your .env file locally or in Render's environment variables.")
 
 # Initialize Flask App and SQLAlchemy
 app = Flask(__name__)
@@ -66,9 +68,9 @@ def fetch_and_store_data():
                     if not exists and period_id is not None:
                         # If it doesn't exist, create and save the new result
                         new_result = KbtResult(
-                            period=period_id,
-                            number=item.get('number', 'N/A'),
-                            color=item.get('color', 'N/A')
+                            period=str(period_id), # Ensure period is a string
+                            number=str(item.get('number', 'N/A')),
+                            color=str(item.get('color', 'N/A'))
                         )
                         db.session.add(new_result)
                         new_results_found += 1
@@ -80,7 +82,8 @@ def fetch_and_store_data():
                     print("Scheduler: No new results to store.")
             else:
                 print("Scheduler: API response was not a valid list or was empty.")
-                print(f"Scheduler: Raw response content: {response.text}")
+                if response:
+                    print(f"Scheduler: Raw response content: {response.text}")
 
         except requests.exceptions.RequestException as e:
             print(f"Scheduler Error: A network error occurred: {e}")
@@ -107,6 +110,7 @@ def index():
         results = KbtResult.query.order_by(KbtResult.period.desc()).limit(100).all()
     except Exception as e:
         error = f"Could not connect to the database or query results: {e}"
+        print(f"Error rendering page: {e}")
 
     # Get current time in Indian Standard Time (IST)
     ist = pytz.timezone('Asia/Kolkata')
@@ -115,6 +119,7 @@ def index():
     return render_template('index.html', results=results, error=error, last_updated=last_updated)
 
 # --- App Initialization ---
+# This block ensures that the app context is available for the first run
 with app.app_context():
     # Create the database table if it doesn't exist
     db.create_all()
@@ -127,4 +132,5 @@ scheduler.start()
 
 if __name__ == '__main__':
     # This part is for local testing and won't be used by Render
-    app.run(debug=True, use_reloader=False)
+    app.run(debug=False, use_reloader=False)
+
