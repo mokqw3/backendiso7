@@ -7,28 +7,33 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 import pytz
 from dotenv import load_dotenv # Used for local development
+from urllib.parse import urlparse # Import the URL parsing library
 
 # Load environment variables from .env file (for local testing)
-# On Render, the variables will be set in the dashboard
 load_dotenv()
 
 # --- Configuration ---
 # Get the database URL from the environment variable
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
-# ** THE FIX for Render and other systems **
-# This block checks if the URL starts with the standard 'postgresql://'
-# and replaces it with 'postgresql+psycopg2://' which SQLAlchemy prefers.
-# This solves the 'Could not parse SQLAlchemy URL' error.
-if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-
 if not DATABASE_URL:
     raise ValueError("No DATABASE_URL set. Please set it in your .env file locally or in Render's environment variables.")
 
+# ** NEW, MORE ROBUST FIX **
+# This block programmatically rebuilds the URL to ensure SQLAlchemy can parse it.
+try:
+    parsed_url = urlparse(DATABASE_URL)
+    # Create a new URL object in the format SQLAlchemy prefers
+    db_url_object = f"postgresql+psycopg2://{parsed_url.username}:{parsed_url.password}@{parsed_url.hostname}:{parsed_url.port or 5432}/{parsed_url.path[1:]}"
+    if parsed_url.query:
+        db_url_object += f"?{parsed_url.query}"
+except Exception as e:
+    raise ValueError(f"Could not process the DATABASE_URL. Error: {e}")
+
+
 # Initialize Flask App and SQLAlchemy
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url_object
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
@@ -133,4 +138,3 @@ scheduler.start()
 if __name__ == '__main__':
     # This part is for local testing and won't be used by Render
     app.run(debug=False, use_reloader=False)
-
