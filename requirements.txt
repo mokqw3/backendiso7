@@ -1,0 +1,7 @@
+Flask
+requests
+gunicorn
+pytz
+Flask-SQLAlchemy
+psycopg2-binary
+APScheduler
