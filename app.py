@@ -16,18 +16,36 @@ load_dotenv()
 # Get the database URL from the environment variable
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
+# --- Start Debugging ---
+# The following lines will print information to your Render logs to help us debug.
+print("--- DATABASE URL DEBUGGING ---")
+print(f"1. Initial DATABASE_URL from environment: {DATABASE_URL}")
+# --- End Debugging ---
+
+
 if not DATABASE_URL:
     raise ValueError("No DATABASE_URL set. Please set it in your .env file locally or in Render's environment variables.")
 
 # ** NEW, MORE ROBUST FIX **
 # This block programmatically rebuilds the URL to ensure SQLAlchemy can parse it.
+db_url_object = None
 try:
     parsed_url = urlparse(DATABASE_URL)
     # Create a new URL object in the format SQLAlchemy prefers
     db_url_object = f"postgresql+psycopg2://{parsed_url.username}:{parsed_url.password}@{parsed_url.hostname}:{parsed_url.port or 5432}/{parsed_url.path[1:]}"
     if parsed_url.query:
         db_url_object += f"?{parsed_url.query}"
+    
+    # --- Start Debugging ---
+    print(f"2. Parsed and rebuilt db_url_object: {db_url_object}")
+    print("--- END DATABASE URL DEBUGGING ---")
+    # --- End Debugging ---
+
 except Exception as e:
+    # --- Start Debugging ---
+    print(f"ERROR: Failed during URL parsing. Error: {e}")
+    print("--- END DATABASE URL DEBUGGING ---")
+    # --- End Debugging ---
     raise ValueError(f"Could not process the DATABASE_URL. Error: {e}")
 
 
